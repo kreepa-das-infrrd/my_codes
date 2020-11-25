@@ -14,6 +14,14 @@ headers = {
     'Content-Type': 'application/json'
 }
 
+conn = mysql.connector.connect(
+    host="54.184.160.83",
+    port="32222",
+    user="root",
+    password="dep9espasTlqablwrest",
+    database="kms_db"
+)
+
 
 def get_all_annotation_document(userid):
     documents = None
@@ -66,14 +74,6 @@ def get_field_value_data(doc, json_dict):
             json_dict[f'policy{idx}_{key}'] = item.get(key).get('value')
 
 
-conn = mysql.connector.connect(
-    host="54.184.160.83",
-    port="32222",
-    user="root",
-    password="dep9espasTlqablwrest",
-    database="kms_db"
-)
-
 cursor = conn.cursor()
 cursor.execute("SELECT * FROM api_instances")
 
@@ -106,6 +106,7 @@ for data in json_data:
     for keys in list(data.keys()):
         if keys not in csv_columns:
             csv_columns.append(keys)
+
 
 csv_columns = list(csv_columns)
 
