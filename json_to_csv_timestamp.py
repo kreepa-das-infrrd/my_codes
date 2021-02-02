@@ -14,13 +14,13 @@ headers = {
     'Content-Type': 'application/json'
 }
 
-conn = mysql.connector.connect(
-    host="54.184.160.83",
-    port="32222",
-    user="root",
-    password="dep9espasTlqablwrest",
-    database="kms_db"
-)
+# conn = mysql.connector.connect(
+#     host="54.184.160.83",
+#     port="32222",
+#     user="root",
+#     password="dep9espasTlqablwrest",
+#     database="kms_db"
+# )
 
 
 def get_all_annotation_document(userids):
@@ -37,14 +37,13 @@ def get_all_annotation_document(userids):
 
     s = Search(using=sn_es_client, index=INDEX_NAME, doc_type='docs')
     s = s.query(ES_QUERY).params(size=10000)
-    documents = []
-    for hit in s.scan():
-        documents.append(hit)
+    response = s.execute().to_dict()
+    documents = [dict({"id": doc["_id"]}, **doc['_source']) for doc in response['hits']['hits']]
     return documents
 
 
 def get_field_value_data(doc, json_dict):
-    value_list = doc.fields.collaterals.value
+    value_list = doc['fields']['collaterals']['value']
     for idx, item in enumerate(value_list, 1):
         for key in item.keys():
             if not item[key]:
@@ -67,20 +66,22 @@ def get_field_value_data(doc, json_dict):
             json_dict[f'policy{idx}_{key}'] = item.get(key).get('value')
 
 
-cursor = conn.cursor()
-cursor.execute("SELECT * FROM api_instances")
+# cursor = conn.cursor()
+# cursor.execute("SELECT * FROM api_instances")
+#
+# myresult = cursor.fetchall()
+#
+# api_keys = """2ac033ea-efbe-40ce-a59c-08707f531554"""
+# api_keys = api_keys.split()
+# userids = []
 
-myresult = cursor.fetchall()
-
-api_keys = """2ac033ea-efbe-40ce-a59c-08707f531554"""
-api_keys = api_keys.split()
-userids = []
-
-for x in myresult:
-    if x[2] in api_keys:
-        userids.append(x[6])
-
-print(userids)
+# for x in myresult:
+#     if x[2] in api_keys:
+#         userids.append(x[6])
+#
+# print(userids)
+userids = ["InfrrdUser:1d220e85-b6fb-4fbb-bf5f-d918fa44bbb9,KongUsername:00d81a61-7dd4-4355-bfef-66f47734e433",
+ "InfrrdUser:1d220e85-b6fb-4fbb-bf5f-d918fa44bbb9,KongUsername:66a18a75-7a8e-49fb-9c5e-3ecc3621e6f8"]
 
 json_data = []
 documents = get_all_annotation_document(userids)
@@ -106,7 +107,7 @@ csv_columns = list(csv_columns)
 print(len(csv_columns))
 
 try:
-    with open(f'2ac033ea-efbe-40ce-a59c-08707f531554.csv', 'w') as csvfile:
+    with open(f'release1-test-set.csv', 'w') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
         writer.writeheader()
         for data in json_data:

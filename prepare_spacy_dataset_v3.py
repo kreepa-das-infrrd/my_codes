@@ -8,6 +8,7 @@ import os
 import pathlib
 from copy import deepcopy
 from itertools import combinations, groupby
+import pickle
 
 import requests
 from natsort import natsorted
@@ -354,6 +355,7 @@ def get_bin_file(user_model_ids, field_name, is_multi_value=False, is_include_ex
         #     continue
 
         entity_list = []
+        file_names = []
         corrected_doc_id = key
         corrected_document_pages = {page.get("id"): page for page in pages if corrected_doc_id == page["documentId"]}
         # has_all_pages = check_has_all_pages([int(page_id.split('_page-')[-1]) for page_id in
@@ -373,6 +375,7 @@ def get_bin_file(user_model_ids, field_name, is_multi_value=False, is_include_ex
             corrected_value_str = corrected_value.get("correctedValue")
             corrected_page_no = corrected_value["pageNumber"]
             vendor_type = corrected_value["vendorType"]
+            fileName = corrected_value["fileName"]
             corrected_token_ids = []
             # print("First corrected word info list: ", corrected_word_info_list)
             if corrected_word_info_list:
@@ -415,20 +418,23 @@ def get_bin_file(user_model_ids, field_name, is_multi_value=False, is_include_ex
                 if corrected_word_info_list:
                     ents = [(corrected_word_info_list[0]["startIndex"], corrected_word_info_list[-1]["endIndex"],
                              corrected_value["fieldName"])]
+                    filename = [(fileName)]
                     validation_ent_data = [(ents[0][0], ents[0][1], ents[0][2], corrected_value_str, vendor_type)]
 
                 else:
                     start_index = corrected_value["correctedStartIndex"] + adding_index
                     end_index = corrected_value["correctedEndIndex"] + adding_index + 1
                     ents = [(start_index, end_index, corrected_value["fieldName"])]
+                    filename = [(fileName)]
                     validation_ent_data = [(ents[0][0], ents[0][1], ents[0][2], corrected_value_str, vendor_type)]
 
             validation_data.extend(validation_ent_data)
             entity_list.extend(ents)
+            file_names.extend(filename)
 
         # remove duplicate ents
         entity_list, validation_data = list(set(entity_list)), list(set(validation_data))
-        report_response = check_entities("\n".join(raw_text_list_in_order), validation_data)
+        report_response = check_entities("\n".join(raw_text_list_in_order), validation_data, file_names)
         if not INCLUDE_INVALID_ENTS:
             # sort the entries on start index
             entity_list = natsorted(entity_list, key=lambda x: x[0])
@@ -438,16 +444,16 @@ def get_bin_file(user_model_ids, field_name, is_multi_value=False, is_include_ex
                 "is_invalid_entity")]
 
         if entity_list:
-            spacy_tup = ("\n".join(raw_text_list_in_order), {"entities": entity_list})
+            spacy_tup = ("\n".join(raw_text_list_in_order), {"entities": entity_list}, file_names)
             spacy_data.append(spacy_tup)
         else:
             invalid_documents_ids.append(key)
 
         entities_report['report_data'][key] = report_response
 
-    # with open(f"{BIN_DIR}/data_set_{field_name}.bin", "wb") as fp:
-    #     print(f"Total {len(spacy_data)} document found for {field_name}")
-    #     pickle.dump(spacy_data, fp)
+    with open(f"{BIN_DIR}/data_set_{field_name}.bin", "wb") as fp:
+        print(f"Total {len(spacy_data)} document found for {field_name}")
+        pickle.dump(spacy_data, fp)
 
     if GENERATE_REPORT:
         pathlib.Path(REPORT_DIR).mkdir(parents=True, exist_ok=True)
@@ -484,7 +490,7 @@ def get_bin_file(user_model_ids, field_name, is_multi_value=False, is_include_ex
     return f"{BIN_DIR}/data_set_{field_name}.bin", f"{REPORT_DIR}/report_{field_name}.json"
 
 
-def check_entities(raw_text, entities):
+def check_entities(raw_text, entities, file_names):
     report = []
     for start, end, label, text, vendor in entities:
         train_text, text = raw_text[start: end], text.strip()
@@ -504,7 +510,8 @@ def check_entities(raw_text, entities):
                     similarity_match=match_per,
                     is_unsimilar=False if match_per >= MATCH_THRESHOLD else True,
                     label=label,
-                    doc_type=vendor
+                    doc_type=vendor,
+                    file_names=file_names
                     )
         report.append(data)
     return report
@@ -518,23 +525,7 @@ if __name__ == "__main__":
     print("Starting...")
     # user model ids need to be populated in user models
     user_models = ["895823ba-9fd3-4fbb-ae81-06a53b32a916"]
-    name_of_field = ["CARRIER", "POLICY_NUMBER", "INSURED_NAME_FIRST_NAME", "INSURED_NAME_LAST_NAME_COMPANY_NAME",
-                     "INSURED_ADDRESS_ZIP_CODE", "INSURED_ADDRESS_STATE", "INSURED_ADDRESS_STREET",
-                     "INSURED_ADDRESS_CITY", "LIEN_HOLDER_ADDRESS_CITY", "LIEN_HOLDER_ADDRESS_ZIP_CODE",
-                     "LIEN_HOLDER_ADDRESS_STREET", "LIEN_HOLDER_ADDRESS_STATE", "DATE_OF_NOTICE", "EFFECTIVE_DATE",
-                     "EXPIRATION_DATE",
-                     "LIEN_HOLDER", "LENDER_LISTED_AS_LIENHOLDER_DESCRIPTION", "CARRIER_ADDRESS_CITY",
-                     "CARRIER_ADDRESS_STATE", "CARRIER_ADDRESS_ZIP_CODE", "CARRIER_ADDRESS_STREET",
-                     "AGENT_PHONE_NUMBER", "VIN", "ALTERNATE_INSURED_NAME_FIRST_NAME",
-                     "ALTERNATE_INSURED_NAME_LAST_NAME_COMPANY_NAME", "DEDUCTIBLE_COLLISION",
-                     "DEDUCTIBLE_COMPREHENSIVE", "DWELLING_ADDRESS_STREET", "DWELLING_ADDRESS_CITY",
-                     "DWELLING_ADDRESS_ZIP_CODE", "DWELLING_ADDRESS_STATE",
-                     "CANCELLATION_DATE", "LENDER_LISTED_AS_MORTGAGEE_DESCRIPTION", "DWELLING_COVERAGE",
-                     "DWELLING_DEDUCTIBLE", "PERSON_LIABILITY_INSURANCE", "PROPERTY_LIABILITY_INSURANCE",
-                     "VEHICLE_YEAR", "VEHICLE_MAKE", "VEHICLE_MODEL",
-                     "ACCIDENT_LIABILITY_INSURANCE", "REINSTATEMENT_DATE", "CHANGE_EFFECTIVE_DATE",
-                     "COMBINED_LIMIT_LIABILITY_INSURANCE", "RENEWAL_DATE", "BINDING_WORDING_DESCRIPTION",
-                     "BINDING_ACCEPTANCE_LENGTH", "WIND_DEDUCTIBLE"]
+    name_of_field = ["INSURED_ADDRESS_ZIP_CODE", "INSURED_ADDRESS_CITY"]
     is_multi_field = False
     for field in name_of_field:
         print(get_bin_file(user_models, field, is_multi_field))
